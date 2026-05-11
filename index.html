@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>高考数理 · DeepSeek 智能解题</title>
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']],
+        processEscapes: true
+      },
+      options: { enableMenu: false }
+    };
+  </script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+  <style>
+    :root {
+      --primary-color: #fbbf24;
+      --bg-dark: #0f1219;
+      --card-bg: #1e2332;
+      --text-main: #e0e5ec;
+      --text-dim: #8e94a5;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      background: #1a1e2b;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', sans-serif;
+      display: flex;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 15px;
+    }
+    .app-container {
+      width: 100%;
+      max-width: 800px;
+      background: var(--bg-dark);
+      border-radius: 28px;
+      padding: 24px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .header { text-align: center; }
+    .header h1 {
+      font-size: 1.6rem;
+      background: linear-gradient(135deg, #a0c4ff, #c4b5fd);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    /* API Key 输入区 */
+    .api-key-section {
+      background: var(--card-bg);
+      border-radius: 16px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      border: 1px solid rgba(251,191,36,0.2);
+    }
+    .api-key-section label {
+      color: var(--primary-color);
+      font-weight: 600;
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .api-key-section input {
+      background: #0f1219;
+      border: 1px solid #2d3548;
+      border-radius: 10px;
+      padding: 10px 14px;
+      color: var(--text-main);
+      font-size: 0.9rem;
+      outline: none;
+      transition: border 0.2s;
+    }
+    .api-key-section input:focus {
+      border-color: var(--primary-color);
+    }
+    .api-key-section small {
+      color: var(--text-dim);
+      font-size: 0.75rem;
+    }
+    /* 预览区域 */
+    .preview-viewport {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 4/3;
+      background: #000;
+      border-radius: 20px;
+      overflow: hidden;
+      border: 1px solid #2d3548;
+    }
+    #video, #photoImage {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: none;
+    }
+    #cropLayer {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      z-index: 10;
+      display: none;
+      touch-action: none;
+    }
+    .crop-box {
+      position: absolute;
+      border: 2px solid var(--primary-color);
+      box-shadow: 0 0 0 9999px rgba(0,0,0,0.6);
+      cursor: move;
+    }
+    .handle {
+      position: absolute;
+      width: 16px; height: 16px;
+      background: var(--primary-color);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+    }
+    .tl { top: 0; left: 0; cursor: nwse-resize; }
+    .tr { top: 0; left: 100%; cursor: nesw-resize; }
+    .bl { top: 100%; left: 0; cursor: nesw-resize; }
+    .br { top: 100%; left: 100%; cursor: nwse-resize; }
+    .tc { top: 0; left: 50%; cursor: ns-resize; }
+    .bc { top: 100%; left: 50%; cursor: ns-resize; }
+    .ml { top: 50%; left: 0; cursor: ew-resize; }
+    .mr { top: 50%; left: 100%; cursor: ew-resize; }
+    /* 按钮组 */
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .btn {
+      padding: 12px;
+      border-radius: 14px;
+      border: none;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: opacity 0.2s;
+    }
+    .btn-secondary { background: #2d3548; color: white; }
+    .btn-primary { background: var(--primary-color); color: #000; grid-column: span 2; }
+    .btn:active { opacity: 0.8; }
+    /* 答案区域 */
+    .answer-card {
+      background: var(--card-bg);
+      border-radius: 20px;
+      padding: 20px;
+      border: 1px solid rgba(251,191,36,0.15);
+      min-height: 150px;
+    }
+    .answer-card h3 { color: var(--primary-color); margin-bottom: 12px; font-size: 1rem; }
+    .answer-body { color: var(--text-main); line-height: 1.8; }
+    .answer-body p { margin-bottom: 10px; }
+    .loading-spin {
+      display: inline-block;
+      width: 18px; height: 18px;
+      border: 2px solid #000;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<div class="app-container">
+  <header class="header">
+    <h1>📐 高考数理 · DeepSeek 解题</h1>
+  </header>
+
+  <!-- 👇👇👇 在这里填入 API Key 👇👇👇 -->
+  <div class="api-key-section">
+    <label>🔑 DeepSeek API Key</label>
+    <input type="password" id="apiKeyInput" placeholder="sk-xxxxxxxxxxxxxxxxxxxxx">
+    <small>密钥仅保存在本地，不会上传第三方。请确保在网络良好的环境下使用。</small>
+  </div>
+  <!-- 👆👆👆 API Key 填写区结束 👆👆👆 -->
+
+  <main class="preview-viewport" id="viewport">
+    <video id="video" autoplay playsinline muted></video>
+    <img id="photoImage" alt="Upload">
+    <div id="cropLayer">
+      <div class="crop-box" id="cropBox">
+        <div class="handle tl" data-dir="tl"></div>
+        <div class="handle tr" data-dir="tr"></div>
+        <div class="handle bl" data-dir="bl"></div>
+        <div class="handle br" data-dir="br"></div>
+        <div class="handle tc" data-dir="tc"></div>
+        <div class="handle bc" data-dir="bc"></div>
+        <div class="handle ml" data-dir="ml"></div>
+        <div class="handle mr" data-dir="mr"></div>
+      </div>
+    </div>
+    <div id="hint" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); color:var(--text-dim);">请上传或开启摄像头</div>
+  </main>
+
+  <div class="controls">
+    <button class="btn btn-secondary" onclick="initCamera()">开启摄像头</button>
+    <button class="btn btn-secondary" onclick="document.getElementById('fInput').click()">上传题目</button>
+    <button class="btn btn-primary" onclick="handleSolve()">
+      <span id="btnText">裁剪并生成解答</span>
+    </button>
+    <input type="file" id="fInput" hidden accept="image/*" onchange="loadImg(event)">
+  </div>
+
+  <section class="answer-card">
+    <h3>📝 规范解答</h3>
+    <div id="result" class="answer-body">
+      <span style="color:var(--text-dim)">等待输入题目...</span>
+    </div>
+  </section>
+</div>
+
+<script>
+  // ---------- 状态管理 ----------
+  const state = {
+    mode: null,           // 'video' | 'image'
+    crop: { x: 10, y: 10, w: 80, h: 30 },   // 百分比单位
+    isDragging: false,
+    dragTarget: null,
+    startPos: { x: 0, y: 0 }
+  };
+
+  const el = {
+    video: document.getElementById('video'),
+    img: document.getElementById('photoImage'),
+    cropLayer: document.getElementById('cropLayer'),
+    cropBox: document.getElementById('cropBox'),
+    result: document.getElementById('result'),
+    hint: document.getElementById('hint'),
+    apiKeyInput: document.getElementById('apiKeyInput'),
+    btnText: document.getElementById('btnText')
+  };
+
+  // ---------- 摄像头 / 图片上传 ----------
+  function initCamera() {
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      .then(stream => {
+        el.video.srcObject = stream;
+        el.video.style.display = 'block';
+        el.img.style.display = 'none';
+        setupCrop('video');
+      })
+      .catch(() => alert("无法调用摄像头，请检查权限或使用上传图片"));
+  }
+
+  function loadImg(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    el.img.src = url;
+    el.img.onload = () => {
+      el.img.style.display = 'block';
+      el.video.style.display = 'none';
+      // 停止摄像头（如果正在使用）
+      if (el.video.srcObject) {
+        el.video.srcObject.getTracks().forEach(t => t.stop());
+        el.video.srcObject = null;
+      }
+      setupCrop('image');
+    };
+  }
+
+  function setupCrop(mode) {
+    state.mode = mode;
+    el.cropLayer.style.display = 'block';
+    el.hint.style.display = 'none';
+    renderCrop();
+  }
+
+  // ---------- 裁剪交互 ----------
+  el.cropLayer.onmousedown = el.cropLayer.ontouchstart = (e) => {
+    const target = e.target;
+    const clientX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
+    const clientY = e.clientY || (e.touches ? e.touches[0].clientY : 0);
+
+    if (target.classList.contains('handle')) {
+      state.dragTarget = target.dataset.dir;
+    } else if (target === el.cropBox) {
+      state.dragTarget = 'move';
+    } else return;
+
+    state.isDragging = true;
+    state.startPos = { x: clientX, y: clientY, ...state.crop };
+    e.preventDefault();
+  };
+
+  window.onmousemove = window.ontouchmove = (e) => {
+    if (!state.isDragging) return;
+    const clientX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
+    const clientY = e.clientY || (e.touches ? e.touches[0].clientY : 0);
+
+    const dx = ((clientX - state.startPos.x) / el.cropLayer.offsetWidth) * 100;
+    const dy = ((clientY - state.startPos.y) / el.cropLayer.offsetHeight) * 100;
+
+    if (state.dragTarget === 'move') {
+      state.crop.x = Math.max(0, Math.min(100 - state.crop.w, state.startPos.x + dx));
+      state.crop.y = Math.max(0, Math.min(100 - state.crop.h, state.startPos.y + dy));
+    } else {
+      const dir = state.dragTarget;
+      if (dir.includes('r')) state.crop.w = Math.max(10, Math.min(100 - state.crop.x, state.startPos.w + dx));
+      if (dir.includes('b')) state.crop.h = Math.max(10, Math.min(100 - state.crop.y, state.startPos.h + dy));
+      if (dir.includes('l')) {
+        const newW = Math.max(10, state.startPos.w - dx);
+        state.crop.x = state.startPos.x + (state.startPos.w - newW);
+        state.crop.w = newW;
+      }
+      if (dir.includes('t')) {
+        const newH = Math.max(10, state.startPos.h - dy);
+        state.crop.y = state.startPos.y + (state.startPos.h - newH);
+        state.crop.h = newH;
+      }
+    }
+    renderCrop();
+  };
+
+  window.onmouseup = window.ontouchend = () => { state.isDragging = false; };
+
+  function renderCrop() {
+    el.cropBox.style.left = state.crop.x + '%';
+    el.cropBox.style.top = state.crop.y + '%';
+    el.cropBox.style.width = state.crop.w + '%';
+    el.cropBox.style.height = state.crop.h + '%';
+  }
+
+  // ---------- 图像处理与 API 调用 ----------
+  async function handleSolve() {
+    const apiKey = el.apiKeyInput.value.trim();
+    if (!apiKey) {
+      alert('请先在顶部填入 DeepSeek API Key');
+      return;
+    }
+    if (!state.mode) {
+      alert('请先提供题目内容（拍照或上传）');
+      return;
+    }
+
+    const btn = el.btnText;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = `<span class="loading-spin"></span> 正在解析...`;
+    el.result.innerHTML = "正在识别题目并调用 DeepSeek 生成解答...";
+
+    try {
+      const blob = await getCropBlob();
+      const base64 = await blobToBase64(blob);
+      const answer = await callDeepSeekAPI(apiKey, base64);
+      displayFormattedResult(answer);
+    } catch (err) {
+      console.error(err);
+      el.result.innerHTML = `<p style="color:#f87171">❌ 请求失败：${err.message}</p>`;
+    } finally {
+      btn.innerHTML = originalText;
+    }
+  }
+
+  function getCropBlob() {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      const source = state.mode === 'video' ? el.video : el.img;
+      const naturalW = state.mode === 'video' ? source.videoWidth : source.naturalWidth;
+      const naturalH = state.mode === 'video' ? source.videoHeight : source.naturalHeight;
+
+      canvas.width = (state.crop.w / 100) * naturalW;
+      canvas.height = (state.crop.h / 100) * naturalH;
+
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(source,
+        (state.crop.x / 100) * naturalW, (state.crop.y / 100) * naturalH,
+        (state.crop.w / 100) * naturalW, (state.crop.h / 100) * naturalH,
+        0, 0, canvas.width, canvas.height
+      );
+      canvas.toBlob(resolve, 'image/jpeg', 0.9);
+    });
+  }
+
+  function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  async function callDeepSeekAPI(apiKey, base64Image) {
+    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',   // 支持图片理解的最新模型
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image_url',
+                image_url: {
+                  url: base64Image,
+                  detail: 'high'
+                }
+              },
+              {
+                type: 'text',
+                text: `请按以下要求给出规范解答：
+1. 识别图中的所有数学题目（中文或英文）。
+2. 使用 LaTeX 格式输出步骤，行内公式用 $...$，行间公式用 $$...$$。
+3. 步骤清晰，最后以“答：...”结尾。
+4. 仅输出题目解析、解、答三部分，不包含任何无关解释。`
+              }
+            ]
+          }
+        ],
+        max_tokens: 2000,
+        temperature: 0.1
+      })
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error?.message || `HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content;
+  }
+
+  function displayFormattedResult(text) {
+    const html = text.trim().split('\n\n').map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
+    el.result.innerHTML = html;
+    if (window.MathJax && window.MathJax.typesetPromise) {
+      MathJax.typesetPromise([el.result]).catch(err => console.log('MathJax 渲染错误:', err));
+    }
+  }
+</script>
+
+</body>
+</html>
